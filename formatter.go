@@ -36,7 +36,7 @@ func (fo formatter) String() string {
 
 func (fo formatter) passThrough(f fmt.State, c rune) {
 	s := "%"
-	for i := range 128 {
+	for i := 0; i < 128; i += 1 {
 		if f.Flag(i) {
 			s += string(rune(i))
 		}
@@ -132,6 +132,7 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 	if v.IsValid() && v.CanInterface() {
 		i := v.Interface()
 		if goStringer, ok := i.(fmt.GoStringer); ok {
+			defer p.catchPanic(v, "GoString")
 			_, _ = io.WriteString(p, goStringer.GoString())
 			return
 		}
