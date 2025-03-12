@@ -126,6 +126,28 @@ func (w diffPrinter) diff(av, bv reflect.Value) {
 		}
 	}
 
+	// Look for a method "func (T1) Equal(T2)" or "Equals" on the values and if
+	// found then use that to compare the values.
+	for _, v := range [][2]reflect.Value{{av, bv}, {bv, av}} {
+		v1, v2 := v[0], v[1]
+		t1, t2 := v1.Type(), v2.Type()
+		equalMethod, ok := t1.MethodByName("Equal")
+		if !ok {
+			equalMethod, ok = t1.MethodByName("Equals")
+		}
+		if ok {
+			equalFnType := reflect.FuncOf([]reflect.Type{t1, t2}, []reflect.Type{reflect.TypeOf(true)}, false)
+			equalFn := equalMethod.Func
+			if equalFn.Type().AssignableTo(equalFnType) {
+				res := equalFn.Call([]reflect.Value{v1, v2})
+				if !res[0].Bool() {
+					w.printf("%+#v != %+#v", v1, v2)
+				}
+				return
+			}
+		}
+	}
+
 	switch kind := at.Kind(); kind {
 	case reflect.Bool:
 		if a, b := av.Bool(), bv.Bool(); a != b {
@@ -188,14 +210,34 @@ func (w diffPrinter) diff(av, bv reflect.Value) {
 			w.printf("%s[%d] != %s[%d]", av.Type(), lenA, bv.Type(), lenB)
 			break
 		}
-		for i := 0; i < lenA; i++ {
-			w.relabel(fmt.Sprintf("[%d]", i)).diff(av.Index(i), bv.Index(i))
+		switch {
+		case av.IsNil() && !bv.IsNil():
+			w.printf("nil != %# v", formatter{v: bv, quote: true})
+		case !av.IsNil() && bv.IsNil():
+			w.printf("%# v != nil", formatter{v: av, quote: true})
+		default:
+			for i := 0; i < lenA; i++ {
+				w.relabel(fmt.Sprintf("[%d]", i)).diff(av.Index(i), bv.Index(i))
+			}
 		}
 	case reflect.String:
 		if a, b := av.String(), bv.String(); a != b {
 			w.printf("%q != %q", a, b)
 		}
 	case reflect.Struct:
+		for i := 0; i < av.NumField(); i++ {
+			af := av.Field(i)
+			bf := bv.Field(i)
+			avDNC := af.Type().String() == "pragma.DoNotCompare"
+			bvDNC := bf.Type().String() == "pragma.DoNotCompare"
+			if avDNC && bvDNC {
+				return
+			}
+			if avDNC != bvDNC {
+				w.printf("cannot compare types %s and %s", av.Type(), bv.Type())
+				return
+			}
+		}
 		for i := 0; i < av.NumField(); i++ {
 			w.relabel(at.Field(i).Name).diff(av.Field(i), bv.Field(i))
 		}

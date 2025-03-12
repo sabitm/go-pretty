@@ -42,9 +42,25 @@ var (
 	i1 = 1
 )
 
+type equalType struct {
+	// v is compared
+	v int
+	// v2 is ignored
+	v2 int
+}
+
+func (et equalType) Equal(et2 equalType) bool {
+	return et.v == et2.v
+}
+
 var diffs = []difftest{
 	{a: nil, b: nil},
 	{a: S{A: 1}, b: S{A: 1}},
+
+	{a: equalType{}, b: equalType{}},
+	{a: equalType{v: 1}, b: equalType{v: 1}},
+	{a: equalType{v2: 1}, b: equalType{v2: 2}},
+	{a: equalType{v: 1}, b: equalType{v: 2}, exp: []string{"pretty.equalType{v:1, v2:0} != pretty.equalType{v:2, v2:0}"}},
 
 	{0, "", []string{`int != string`}},
 	{0, 1, []string{`0 != 1`}},
@@ -116,6 +132,7 @@ var diffs = []difftest{
 	{struct{ x string }{"a"}, struct{ x string }{"b"}, []string{`x: "a" != "b"`}},
 	{struct{ x N }{N{0}}, struct{ x N }{N{0}}, nil},
 	{struct{ x N }{N{0}}, struct{ x N }{N{1}}, []string{`x.N: 0 != 1`}},
+	{struct{ x []int }{[]int{}}, struct{ x []int }{nil}, []string{`x: []int{} != nil`}},
 	{
 		struct{ x unsafe.Pointer }{unsafe.Pointer(uintptr(0))},
 		struct{ x unsafe.Pointer }{unsafe.Pointer(uintptr(0))},
@@ -135,6 +152,7 @@ func TestDiff(t *testing.T) {
 }
 
 func expectDiffOutput(t *testing.T, a, b interface{}, exp []string) {
+	t.Helper()
 	got := Diff(a, b)
 	eq := len(got) == len(exp)
 	if eq {
@@ -238,11 +256,13 @@ func TestDiffCycle(t *testing.T) {
 }
 
 func diffdiff(t *testing.T, got, exp []string) {
+	t.Helper()
 	minus(t, "unexpected:", got, exp)
 	minus(t, "missing:", exp, got)
 }
 
 func minus(t *testing.T, s string, a, b []string) {
+	t.Helper()
 	var i, j int
 	for i = 0; i < len(a); i++ {
 		for j = 0; j < len(b); j++ {

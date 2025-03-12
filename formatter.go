@@ -36,13 +36,13 @@ func (fo formatter) String() string {
 
 func (fo formatter) passThrough(f fmt.State, c rune) {
 	s := "%"
-	for i := 0; i < 128; i++ {
+	for i := range 128 {
 		if f.Flag(i) {
 			s += string(rune(i))
 		}
 	}
 	if w, ok := f.Width(); ok {
-		s += fmt.Sprintf("%d", w)
+		s += strconv.Itoa(w)
 	}
 	if p, ok := f.Precision(); ok {
 		s += fmt.Sprintf(".%d", p)
@@ -91,7 +91,7 @@ func (p *printer) indent() *printer {
 
 func (p *printer) printInline(v reflect.Value, x interface{}, showType bool) {
 	if showType {
-		io.WriteString(p, v.Type().String())
+		_, _ = io.WriteString(p, v.Type().String())
 		fmt.Fprintf(p, "(%#v)", x)
 	} else {
 		fmt.Fprintf(p, "%#v", x)
@@ -125,15 +125,14 @@ func (p *printer) catchPanic(v reflect.Value, method string) {
 
 func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 	if p.depth > 10 {
-		io.WriteString(p, "!%v(DEPTH EXCEEDED)")
+		_, _ = io.WriteString(p, "!%v(DEPTH EXCEEDED)")
 		return
 	}
 
 	if v.IsValid() && v.CanInterface() {
 		i := v.Interface()
 		if goStringer, ok := i.(fmt.GoStringer); ok {
-			defer p.catchPanic(v, "GoString")
-			io.WriteString(p, goStringer.GoString())
+			_, _ = io.WriteString(p, goStringer.GoString())
 			return
 		}
 	}
@@ -154,7 +153,7 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 	case reflect.Map:
 		t := v.Type()
 		if showType {
-			io.WriteString(p, t.String())
+			_, _ = io.WriteString(p, t.String())
 		}
 		writeByte(p, '{')
 		if nonzero(v) {
@@ -176,9 +175,9 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 				showTypeInStruct := t.Elem().Kind() == reflect.Interface
 				pp.printValue(mv, showTypeInStruct, true)
 				if expand {
-					io.WriteString(pp, ",\n")
+					_, _ = io.WriteString(pp, ",\n")
 				} else if i < v.Len()-1 {
-					io.WriteString(pp, ", ")
+					_, _ = io.WriteString(pp, ", ")
 				}
 			}
 			if expand {
@@ -197,9 +196,8 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 			}
 			p.visited[vis] = p.depth
 		}
-
 		if showType {
-			io.WriteString(p, t.String())
+			_, _ = io.WriteString(p, t.String())
 		}
 		writeByte(p, '{')
 		if nonzero(v) {
@@ -212,7 +210,15 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 			for i := 0; i < v.NumField(); i++ {
 				showTypeInStruct := true
 				if f := t.Field(i); f.Name != "" {
-					io.WriteString(pp, f.Name)
+					// Ignore protobuf internal fields.
+					// TODO: make this more robust without having to require the protocol buffers library.
+					switch [2]string{f.Name, f.Type.String()} {
+					case [2]string{"state", "impl.MessageState"},
+						[2]string{"sizeCache", "int32"},
+						[2]string{"unknownFields", "[]uint8"}:
+						continue
+					}
+					_, _ = io.WriteString(pp, f.Name)
 					writeByte(pp, ':')
 					if expand {
 						writeByte(pp, '\t')
@@ -221,9 +227,9 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 				}
 				pp.printValue(getField(v, i), showTypeInStruct, true)
 				if expand {
-					io.WriteString(pp, ",\n")
+					_, _ = io.WriteString(pp, ",\n")
 				} else if i < v.NumField()-1 {
-					io.WriteString(pp, ", ")
+					_, _ = io.WriteString(pp, ", ")
 				}
 			}
 			if expand {
@@ -234,26 +240,26 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 	case reflect.Interface:
 		switch e := v.Elem(); {
 		case e.Kind() == reflect.Invalid:
-			io.WriteString(p, "nil")
+			_, _ = io.WriteString(p, "nil")
 		case e.IsValid():
 			pp := p.clone()
 			pp.depth++
 			pp.printValue(e, showType, true)
 		default:
-			io.WriteString(p, v.Type().String())
-			io.WriteString(p, "(nil)")
+			_, _ = io.WriteString(p, v.Type().String())
+			_, _ = io.WriteString(p, "(nil)")
 		}
 	case reflect.Array, reflect.Slice:
 		t := v.Type()
 		if showType {
-			io.WriteString(p, t.String())
+			_, _ = io.WriteString(p, t.String())
 		}
 		if v.Kind() == reflect.Slice && v.IsNil() && showType {
-			io.WriteString(p, "(nil)")
+			_, _ = io.WriteString(p, "(nil)")
 			break
 		}
 		if v.Kind() == reflect.Slice && v.IsNil() {
-			io.WriteString(p, "nil")
+			_, _ = io.WriteString(p, "nil")
 			break
 		}
 		writeByte(p, '{')
@@ -267,9 +273,9 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 			showTypeInSlice := t.Elem().Kind() == reflect.Interface
 			pp.printValue(v.Index(i), showTypeInSlice, true)
 			if expand {
-				io.WriteString(pp, ",\n")
+				_, _ = io.WriteString(pp, ",\n")
 			} else if i < v.Len()-1 {
-				io.WriteString(pp, ", ")
+				_, _ = io.WriteString(pp, ", ")
 			}
 		}
 		if expand {
@@ -280,8 +286,8 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 		e := v.Elem()
 		if !e.IsValid() {
 			writeByte(p, '(')
-			io.WriteString(p, v.Type().String())
-			io.WriteString(p, ")(nil)")
+			_, _ = io.WriteString(p, v.Type().String())
+			_, _ = io.WriteString(p, ")(nil)")
 		} else {
 			pp := p.clone()
 			pp.depth++
@@ -292,18 +298,18 @@ func (p *printer) printValue(v reflect.Value, showType, quote bool) {
 		x := v.Pointer()
 		if showType {
 			writeByte(p, '(')
-			io.WriteString(p, v.Type().String())
+			_, _ = io.WriteString(p, v.Type().String())
 			fmt.Fprintf(p, ")(%#v)", x)
 		} else {
 			fmt.Fprintf(p, "%#v", x)
 		}
 	case reflect.Func:
-		io.WriteString(p, v.Type().String())
-		io.WriteString(p, " {...}")
+		_, _ = io.WriteString(p, v.Type().String())
+		_, _ = io.WriteString(p, " {...}")
 	case reflect.UnsafePointer:
 		p.printInline(v, v.Pointer(), showType)
 	case reflect.Invalid:
-		io.WriteString(p, "nil")
+		_, _ = io.WriteString(p, "nil")
 	}
 }
 
@@ -352,11 +358,11 @@ func (p *printer) fmtString(s string, quote bool) {
 	if quote {
 		s = strconv.Quote(s)
 	}
-	io.WriteString(p, s)
+	_, _ = io.WriteString(p, s)
 }
 
 func writeByte(w io.Writer, b byte) {
-	w.Write([]byte{b})
+	_, _ = w.Write([]byte{b})
 }
 
 func getField(v reflect.Value, i int) reflect.Value {

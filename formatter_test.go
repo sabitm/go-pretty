@@ -39,6 +39,7 @@ func (f F) Format(s fmt.State, c rune) {
 	fmt.Fprintf(s, "F(%d)", int(f))
 }
 
+//nolint:structcheck,unused
 type Stringer struct{ i int }
 
 func (s *Stringer) String() string { return "foo" }

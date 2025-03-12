@@ -26,7 +26,7 @@ func Errorf(format string, a ...interface{}) error {
 //
 // Calling Fprintf(w, f, x, y) is equivalent to
 // fmt.Fprintf(w, f, Formatter(x), Formatter(y)).
-func Fprintf(w io.Writer, format string, a ...interface{}) (n int, error error) {
+func Fprintf(w io.Writer, format string, a ...interface{}) (int, error) {
 	return fmt.Fprintf(w, format, wrap(a, false)...)
 }
 
