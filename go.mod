@@ -1,4 +1,4 @@
-module github.com/kr/pretty
+module github.com/sabitm/go-pretty
 
 go 1.17
 
